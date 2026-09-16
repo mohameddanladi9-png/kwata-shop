@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Espace vendeur</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; }
+    .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 1rem 0; }
+    .carte { background: #f7f7f5; border-radius: 8px; padding: 12px; }
+    .carte-label { font-size: 0.8rem; color: #666; margin: 0; }
+    .carte-valeur { font-size: 1.4rem; font-weight: bold; margin: 4px 0 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee; }
+    select { padding: 4px; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+    .badge-attente { background: #fff3cd; }
+    .badge-expedier { background: #cfe2ff; }
+    .badge-livre { background: #d1e7dd; }
+  </style>
+</head>
+<body>
+  <h1 id="titre-boutique">Chargement...</h1>
+  <div class="cartes" id="cartes"></div>
+  <h2>Commandes récentes</h2>
+  <table>
+    <thead>
+      <tr><th>Produit</th><th>Client</th><th>Montant</th><th>Statut</th></tr>
+    </thead>
+    <tbody id="lignes-commandes"></tbody>
+  </table>
+
+  <script type="module">
+    import { getMyShop } from './shops.js';
+    import { getStatsVendeur, listCommandesVendeur, mettreAJourStatutLigne } from './seller-dashboard.js';
+
+    async function init() {
+      const shop = await getMyShop();
+      if (!shop) {
+        document.getElementById('titre-boutique').textContent = 'Aucune boutique associee a ce compte.';
+        return;
+      }
+
+      document.getElementById('titre-boutique').textContent = `Boutique : ${shop.name}`;
+
+      const stats = await getStatsVendeur(shop.id);
+      afficherCartes(stats);
+
+      const commandes = await listCommandesVendeur(shop.id);
+      afficherCommandes(commandes);
+    }
+
+    function afficherCartes(stats) {
+      document.getElementById('cartes').innerHTML = `
+        <div class="carte"><p class="carte-label">Ventes du mois</p><p class="carte-valeur">${stats.ventesDuMois.toLocaleString('fr-FR')} FCFA</p></div>
+        <div class="carte"><p class="carte-label">Commandes</p><p class="carte-valeur">${stats.nbCommandes}</p></div>
+        <div class="carte"><p class="carte-label">En attente</p><p class="carte-valeur">${stats.enAttente}</p></div>
+        <div class="carte"><p class="carte-label">Note moyenne</p><p class="carte-valeur">${stats.noteMoyenne || '—'}</p></div>
+      `;
+    }
+
+    function afficherCommandes(commandes) {
+      const options = ['en_attente', 'a_expedier', 'expediee', 'livree'];
+      document.getElementById('lignes-commandes').innerHTML = commandes.map((c) => `
+        <tr data-id="${c.id}">
+          <td>${c.products?.name ?? ''}</td>
+          <td>${c.orders?.users?.full_name ?? 'Client'}</td>
+          <td>${(c.unit_price * c.quantity).toLocaleString('fr-FR')} FCFA</td>
+          <td>
+            <select class="select-statut">
+              ${options.map((o) => `<option value="${o}" ${o === c.status ? 'selected' : ''}>${o.replace('_', ' ')}</option>`).join('')}
+            </select>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('.select-statut').forEach((select) => {
+        select.addEventListener('change', async (e) => {
+          const orderItemId = e.target.closest('tr').dataset.id;
+          const { error } = await mettreAJourStatutLigne(orderItemId, e.target.value);
+          if (error) alert(error);
+        });
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

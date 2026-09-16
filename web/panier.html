@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Panier</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 0 auto; padding: 1rem; }
+    .boutique-groupe { border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+    .boutique-nom { font-size: 0.85rem; color: #666; margin: 0 0 8px; }
+    .ligne-article { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+    .ligne-article img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; background: #f2f2f2; }
+    .ligne-nom { flex: 1; font-size: 0.9rem; }
+    .ligne-qte { display: flex; align-items: center; gap: 6px; }
+    .ligne-qte button { width: 28px; height: 28px; }
+    #total { font-size: 1.2rem; font-weight: bold; text-align: right; margin: 1rem 0; }
+    #btn-commander { width: 100%; padding: 12px; background: #0f6e56; color: white; border: none; border-radius: 6px; font-size: 1rem; }
+    #vide { text-align: center; color: #666; padding: 3rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Mon panier</h1>
+  <div id="contenu"></div>
+  <div id="total"></div>
+  <button id="btn-commander">Passer la commande</button>
+
+  <script type="module">
+    import { getPanier, grouperParBoutique, modifierQuantite, calculerTotal } from './cart.js';
+    import { creerCommande } from './orders.js';
+
+    const contenu = document.getElementById('contenu');
+    const totalEl = document.getElementById('total');
+    const btnCommander = document.getElementById('btn-commander');
+
+    function afficher() {
+      const groupes = grouperParBoutique();
+
+      if (groupes.length === 0) {
+        contenu.innerHTML = '<p id="vide">Ton panier est vide.</p>';
+        btnCommander.disabled = true;
+      } else {
+        contenu.innerHTML = groupes.map((g) => `
+          <div class="boutique-groupe">
+            <p class="boutique-nom">${g.shopName}</p>
+            ${g.articles.map((a) => `
+              <div class="ligne-article" data-id="${a.productId}">
+                <img src="${a.imageUrl ?? ''}" alt="" />
+                <span class="ligne-nom">${a.name}</span>
+                <div class="ligne-qte">
+                  <button class="moins">−</button>
+                  <span>${a.quantity}</span>
+                  <button class="plus">+</button>
+                </div>
+                <span>${(a.unitPrice * a.quantity).toLocaleString('fr-FR')} ${a.currency}</span>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+        btnCommander.disabled = false;
+      }
+
+      totalEl.textContent = `Total : ${calculerTotal().toLocaleString('fr-FR')} FCFA`;
+      brancherBoutons();
+    }
+
+    function brancherBoutons() {
+      document.querySelectorAll('.ligne-article').forEach((ligne) => {
+        const productId = ligne.dataset.id;
+        const article = getPanier().find((a) => a.productId === productId);
+
+        ligne.querySelector('.plus').addEventListener('click', () => {
+          modifierQuantite(productId, article.quantity + 1);
+        });
+        ligne.querySelector('.moins').addEventListener('click', () => {
+          modifierQuantite(productId, article.quantity - 1);
+        });
+      });
+    }
+
+    document.addEventListener('panier:maj', afficher);
+
+    btnCommander.addEventListener('click', async () => {
+      // NOTE : remplace 'ADRESSE_ID_A_SELECTIONNER' par une vraie selection d'adresse
+      // (a construire : liste des adresses du compte, ou formulaire d'ajout).
+      const addressId = prompt('ID de l\'adresse de livraison (temporaire, a remplacer par un vrai selecteur) :');
+      if (!addressId) return;
+
+      btnCommander.disabled = true;
+      btnCommander.textContent = 'Creation de la commande...';
+
+      const { order, error } = await creerCommande(getPanier(), addressId);
+
+      if (error) {
+        alert(error);
+        btnCommander.disabled = false;
+        btnCommander.textContent = 'Passer la commande';
+        return;
+      }
+
+      location.href = `paiement.html?orderId=${order.id}`;
+    });
+
+    afficher();
+  </script>
+</body>
+</html>

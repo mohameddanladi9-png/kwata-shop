@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Fiche produit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 0 auto; padding: 1rem; }
+    #image-principale { width: 100%; height: 280px; object-fit: cover; background: #f2f2f2; border-radius: 8px; }
+    .miniatures { display: flex; gap: 6px; margin-top: 6px; }
+    .miniatures img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.6; }
+    .miniatures img.active { opacity: 1; outline: 2px solid #0f6e56; }
+    h1 { font-size: 1.2rem; margin: 1rem 0 0.25rem; }
+    #prix { font-size: 1.4rem; font-weight: bold; color: #0f6e56; }
+    #boutique { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: #555; margin: 0.75rem 0; }
+    .badge-verifie { color: #1a7f37; }
+    #onglets { display: flex; gap: 8px; margin: 1rem 0; }
+    .onglet { flex: 1; text-align: center; padding: 8px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; }
+    .onglet.actif { background: #e1f5ee; border-color: #0f6e56; color: #0f6e56; }
+    #actions { display: flex; gap: 8px; margin-top: 1rem; }
+    #actions button { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 0.95rem; }
+    #btn-panier { background: #0f6e56; color: white; border: none; }
+    .avis { border-top: 1px solid #eee; padding: 10px 0; }
+    #etat { color: #666; padding: 2rem 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="etat">Chargement...</div>
+  <div id="contenu" style="display:none;">
+    <img id="image-principale" src="" alt="" />
+    <div class="miniatures" id="miniatures"></div>
+
+    <h1 id="nom"></h1>
+    <p id="prix"></p>
+    <div id="boutique"></div>
+
+    <div id="onglets">
+      <div class="onglet actif" data-mode="detail">Détail</div>
+      <div class="onglet" data-mode="gros">Gros</div>
+    </div>
+    <p id="note-gros" style="font-size:0.85rem; color:#666;"></p>
+
+    <p id="description"></p>
+
+    <div id="actions">
+      <button id="btn-devis">Demander un devis</button>
+      <button id="btn-panier">Ajouter au panier</button>
+    </div>
+
+    <h2>Avis</h2>
+    <div id="avis"></div>
+  </div>
+
+  <script type="module">
+    import { getProductById } from './products.js';
+
+    const params = new URLSearchParams(location.search);
+    const productId = params.get('id');
+    const etat = document.getElementById('etat');
+    const contenu = document.getElementById('contenu');
+
+    let mode = 'detail'; // 'detail' ou 'gros'
+    let produit = null;
+
+    async function init() {
+      if (!productId) {
+        etat.textContent = 'Produit introuvable.';
+        return;
+      }
+
+      produit = await getProductById(productId);
+      if (!produit) {
+        etat.textContent = 'Ce produit n\'est plus disponible.';
+        return;
+      }
+
+      etat.style.display = 'none';
+      contenu.style.display = 'block';
+      afficherImages();
+      afficherInfos();
+      afficherAvis();
+    }
+
+    function afficherImages() {
+      const images = (produit.product_images || []).sort((a, b) => a.position - b.position);
+      const principale = document.getElementById('image-principale');
+      const miniatures = document.getElementById('miniatures');
+
+      principale.src = images[0]?.url ?? '';
+      principale.alt = produit.name;
+
+      miniatures.innerHTML = images.map((img, i) => `
+        <img src="${img.url}" class="${i === 0 ? 'active' : ''}" data-url="${img.url}" alt="" />
+      `).join('');
+
+      miniatures.querySelectorAll('img').forEach((img) => {
+        img.addEventListener('click', () => {
+          principale.src = img.dataset.url;
+          miniatures.querySelectorAll('img').forEach((i) => i.classList.remove('active'));
+          img.classList.add('active');
+        });
+      });
+    }
+
+    function afficherInfos() {
+      document.getElementById('nom').textContent = produit.name;
+      document.getElementById('description').textContent = produit.description ?? '';
+
+      const boutiqueDiv = document.getElementById('boutique');
+      const verifie = produit.shops?.verification_status === 'valide';
+      boutiqueDiv.innerHTML = `
+        <span>${produit.shops?.name ?? ''}</span>
+        ${verifie ? '<span class="badge-verifie">✓ Vendeur vérifié</span>' : ''}
+        <span>⭐ ${produit.shops?.rating_avg ?? '—'}</span>
+      `;
+
+      document.querySelectorAll('.onglet').forEach((onglet) => {
+        onglet.addEventListener('click', () => {
+          mode = onglet.dataset.mode;
+          document.querySelectorAll('.onglet').forEach((o) => o.classList.remove('actif'));
+          onglet.classList.add('actif');
+          afficherPrix();
+        });
+      });
+
+      afficherPrix();
+    }
+
+    function afficherPrix() {
+      const prixEl = document.getElementById('prix');
+      const noteGros = document.getElementById('note-gros');
+
+      if (mode === 'gros' && produit.price_wholesale) {
+        prixEl.textContent = `${Number(produit.price_wholesale).toLocaleString('fr-FR')} ${produit.currency} / unité`;
+        noteGros.textContent = produit.min_wholesale_qty
+          ? `À partir de ${produit.min_wholesale_qty} unités`
+          : '';
+      } else {
+        prixEl.textContent = `${Number(produit.price_retail).toLocaleString('fr-FR')} ${produit.currency}`;
+        noteGros.textContent = '';
+      }
+    }
+
+    function afficherAvis() {
+      const avisDiv = document.getElementById('avis');
+      const avis = produit.reviews || [];
+
+      if (avis.length === 0) {
+        avisDiv.innerHTML = '<p style="color:#666;">Aucun avis pour le moment.</p>';
+        return;
+      }
+
+      avisDiv.innerHTML = avis.map((a) => `
+        <div class="avis">
+          <strong>${'⭐'.repeat(a.rating)}</strong>
+          <p>${escapeHtml(a.comment ?? '')}</p>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    document.getElementById('btn-panier').addEventListener('click', () => {
+      alert('Panier a brancher a l\'etape suivante (panier -> commande -> paiement).');
+    });
+    document.getElementById('btn-devis').addEventListener('click', () => {
+      alert('Demande de devis prevue en V2 (table quotes deja en place).');
+    });
+
+    init();
+  </script>
+</body>
+</html>

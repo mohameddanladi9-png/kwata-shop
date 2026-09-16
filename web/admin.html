@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Administration</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; gap: 12px; border-bottom: 1px solid #ddd; margin-bottom: 1rem; }
+    nav button { background: none; border: none; padding: 8px 4px; font-size: 0.95rem; cursor: pointer; color: #666; }
+    nav button.actif { color: #0f6e56; border-bottom: 2px solid #0f6e56; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee; }
+    button.action { padding: 4px 10px; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer; }
+    button.valider { border-color: #1a7f37; color: #1a7f37; }
+    button.suspendre { border-color: #d9534f; color: #d9534f; }
+    section { display: none; }
+    section.active { display: block; }
+  </style>
+</head>
+<body>
+  <h1>Administration Kwata Shop</h1>
+  <nav>
+    <button data-section="boutiques" class="actif">Boutiques à valider</button>
+    <button data-section="produits">Produits</button>
+    <button data-section="litiges">Litiges</button>
+    <button data-section="audit">Journal d'audit</button>
+  </nav>
+
+  <section id="boutiques" class="active">
+    <table>
+      <thead><tr><th>Boutique</th><th>Type</th><th>Statut</th><th>Action</th></tr></thead>
+      <tbody id="lignes-boutiques"></tbody>
+    </table>
+  </section>
+
+  <section id="produits">
+    <table>
+      <thead><tr><th>Produit</th><th>Boutique</th><th>Statut</th><th>Action</th></tr></thead>
+      <tbody id="lignes-produits"></tbody>
+    </table>
+  </section>
+
+  <section id="litiges">
+    <table>
+      <thead><tr><th>Commande</th><th>Motif</th><th>Statut</th><th>Action</th></tr></thead>
+      <tbody id="lignes-litiges"></tbody>
+    </table>
+  </section>
+
+  <section id="audit">
+    <table>
+      <thead><tr><th>Date</th><th>Admin</th><th>Action</th><th>Cible</th></tr></thead>
+      <tbody id="lignes-audit"></tbody>
+    </table>
+  </section>
+
+  <script type="module">
+    import {
+      listBoutiquesAValider, validerBoutique, suspendreBoutique,
+      listProduitsAModerer, retirerProduit,
+      listLitiges, resoudreLitige,
+      listJournalAudit,
+    } from './admin.js';
+
+    document.querySelectorAll('nav button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('nav button').forEach((b) => b.classList.remove('actif'));
+        document.querySelectorAll('section').forEach((s) => s.classList.remove('active'));
+        btn.classList.add('actif');
+        document.getElementById(btn.dataset.section).classList.add('active');
+      });
+    });
+
+    async function chargerBoutiques() {
+      const boutiques = await listBoutiquesAValider();
+      document.getElementById('lignes-boutiques').innerHTML = boutiques.map((b) => `
+        <tr data-id="${b.id}">
+          <td>${b.name}</td>
+          <td>${b.type}</td>
+          <td>${b.verification_status}</td>
+          <td>
+            <button class="action valider">Valider</button>
+            <button class="action suspendre">Suspendre</button>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('#lignes-boutiques .valider').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          await validerBoutique(e.target.closest('tr').dataset.id);
+          chargerBoutiques();
+        });
+      });
+      document.querySelectorAll('#lignes-boutiques .suspendre').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          await suspendreBoutique(e.target.closest('tr').dataset.id);
+          chargerBoutiques();
+        });
+      });
+    }
+
+    async function chargerProduits() {
+      const produits = await listProduitsAModerer();
+      document.getElementById('lignes-produits').innerHTML = produits.map((p) => `
+        <tr data-id="${p.id}">
+          <td>${p.name}</td>
+          <td>${p.shops?.name ?? ''}</td>
+          <td>${p.status}</td>
+          <td>${p.status === 'actif' ? '<button class="action suspendre">Retirer</button>' : '—'}</td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('#lignes-produits .suspendre').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          await retirerProduit(e.target.closest('tr').dataset.id);
+          chargerProduits();
+        });
+      });
+    }
+
+    async function chargerLitiges() {
+      const litiges = await listLitiges({ statut: 'ouvert' });
+      document.getElementById('lignes-litiges').innerHTML = litiges.map((l) => `
+        <tr data-id="${l.id}">
+          <td>#${l.orders?.id ?? ''}</td>
+          <td>${l.reason}</td>
+          <td>${l.status}</td>
+          <td><button class="action valider">Marquer résolu</button></td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('#lignes-litiges .valider').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          const resolution = prompt('Resolution du litige :');
+          if (resolution === null) return;
+          await resoudreLitige(e.target.closest('tr').dataset.id, resolution);
+          chargerLitiges();
+        });
+      });
+    }
+
+    async function chargerAudit() {
+      const journal = await listJournalAudit();
+      document.getElementById('lignes-audit').innerHTML = journal.map((j) => `
+        <tr>
+          <td>${new Date(j.created_at).toLocaleString('fr-FR')}</td>
+          <td>${j.users?.full_name ?? j.admin_id ?? ''}</td>
+          <td>${j.action}</td>
+          <td>${j.target_type} #${j.target_id ?? ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    chargerBoutiques();
+    chargerProduits();
+    chargerLitiges();
+    chargerAudit();
+  </script>
+</body>
+</html>

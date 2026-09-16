@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Catalogue</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f6e56" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+    }
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; }
+    #recherche { width: 100%; padding: 0.6rem; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem; }
+    #grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .carte { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; }
+    .carte img { width: 100%; height: 120px; object-fit: cover; background: #f2f2f2; }
+    .carte-contenu { padding: 8px; }
+    .carte-nom { font-size: 0.9rem; margin: 0 0 4px; }
+    .carte-prix { font-weight: bold; margin: 0; }
+    .carte-boutique { font-size: 0.75rem; color: #666; margin: 4px 0 0; }
+    #pagination { display: flex; justify-content: center; gap: 8px; margin-top: 1rem; }
+    #etat { text-align: center; color: #666; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Kwata Shop</h1>
+  <input type="search" id="recherche" placeholder="Rechercher un produit..." />
+  <div id="etat"></div>
+  <div id="grille"></div>
+  <div id="pagination"></div>
+
+  <script type="module">
+    import { listCatalogue } from './products.js';
+
+    const grille = document.getElementById('grille');
+    const etat = document.getElementById('etat');
+    const pagination = document.getElementById('pagination');
+    const champRecherche = document.getElementById('recherche');
+
+    let page = 0;
+    const pageSize = 20;
+    let rechercheActuelle = '';
+
+    async function charger() {
+      etat.textContent = 'Chargement...';
+      grille.innerHTML = '';
+
+      const { products, total } = await listCatalogue({
+        search: rechercheActuelle || undefined,
+        page,
+        pageSize,
+      });
+
+      etat.textContent = products.length === 0 ? 'Aucun produit trouve.' : '';
+      grille.innerHTML = products.map(carteProduit).join('');
+      afficherPagination(total);
+    }
+
+    function carteProduit(p) {
+      const image = (p.product_images || []).sort((a, b) => a.position - b.position)[0];
+      const boutique = p.shops?.name ?? '';
+      return `
+        <a class="carte" href="produit.html?id=${p.id}">
+          <img src="${image?.url ?? ''}" alt="${p.name}" loading="lazy" />
+          <div class="carte-contenu">
+            <p class="carte-nom">${escapeHtml(p.name)}</p>
+            <p class="carte-prix">${Number(p.price_retail).toLocaleString('fr-FR')} ${p.currency}</p>
+            <p class="carte-boutique">${escapeHtml(boutique)}</p>
+          </div>
+        </a>
+      `;
+    }
+
+    function afficherPagination(total) {
+      const nbPages = Math.ceil(total / pageSize);
+      if (nbPages <= 1) { pagination.innerHTML = ''; return; }
+
+      let html = '';
+      for (let i = 0; i < nbPages; i++) {
+        html += `<button data-page="${i}" ${i === page ? 'disabled' : ''}>${i + 1}</button>`;
+      }
+      pagination.innerHTML = html;
+
+      pagination.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          page = Number(btn.dataset.page);
+          charger();
+        });
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str ?? '';
+      return div.innerHTML;
+    }
+
+    let debounce;
+    champRecherche.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        rechercheActuelle = champRecherche.value.trim();
+        page = 0;
+        charger();
+      }, 300);
+    });
+
+    charger();
+  </script>
+</body>
+</html>

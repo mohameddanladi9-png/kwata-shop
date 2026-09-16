@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Paiement</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 1rem; }
+    .operateur { display: flex; gap: 10px; margin: 1rem 0; }
+    .operateur button { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: white; }
+    .operateur button.selectionne { border-color: #0f6e56; background: #e1f5ee; color: #0f6e56; }
+    input[type="tel"] { width: 100%; padding: 10px; font-size: 1rem; box-sizing: border-box; margin: 0.5rem 0 1rem; }
+    #btn-payer { width: 100%; padding: 12px; background: #0f6e56; color: white; border: none; border-radius: 6px; font-size: 1rem; }
+    #statut { margin-top: 1rem; padding: 10px; border-radius: 6px; }
+    #statut.attente { background: #fff3cd; }
+    #statut.succes { background: #d1e7dd; }
+    #statut.erreur { background: #f8d7da; }
+  </style>
+</head>
+<body>
+  <h1>Paiement de la commande</h1>
+  <p id="montant"></p>
+
+  <p>Choisis ton operateur Mobile Money</p>
+  <div class="operateur">
+    <button data-provider="orange_money">Orange Money</button>
+    <button data-provider="mtn_momo">MTN MoMo</button>
+  </div>
+
+  <label>Numero de telephone
+    <input type="tel" id="telephone" placeholder="6XXXXXXXX" />
+  </label>
+
+  <button id="btn-payer">Payer maintenant</button>
+  <div id="statut" style="display:none;"></div>
+
+  <script type="module">
+    import { getCommande } from './orders.js';
+
+    const params = new URLSearchParams(location.search);
+    const orderId = params.get('orderId');
+    let providerChoisi = null;
+    let intervalleVerif = null;
+
+    async function init() {
+      const commande = await getCommande(orderId);
+      if (!commande) {
+        document.getElementById('montant').textContent = 'Commande introuvable.';
+        return;
+      }
+      document.getElementById('montant').textContent =
+        `Montant a payer : ${Number(commande.total_amount).toLocaleString('fr-FR')} ${commande.currency}`;
+    }
+
+    document.querySelectorAll('.operateur button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        providerChoisi = btn.dataset.provider;
+        document.querySelectorAll('.operateur button').forEach((b) => b.classList.remove('selectionne'));
+        btn.classList.add('selectionne');
+      });
+    });
+
+    document.getElementById('btn-payer').addEventListener('click', async () => {
+      const telephone = document.getElementById('telephone').value.trim();
+      const statutDiv = document.getElementById('statut');
+
+      if (!providerChoisi) return afficherStatut('erreur', 'Choisis un operateur.');
+      if (!telephone) return afficherStatut('erreur', 'Entre ton numero de telephone.');
+
+      afficherStatut('attente', 'Initialisation du paiement...');
+
+      // Remplace SUPABASE_URL par l'URL de ton projet (voir supabaseClient.js)
+      const reponse = await fetch('https://kmlijcijzvgzzzdiyeah.supabase.co/functions/v1/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, provider: providerChoisi, phone: telephone }),
+      });
+
+      const resultat = await reponse.json();
+
+      if (resultat.error) {
+        return afficherStatut('erreur', resultat.error);
+      }
+
+      afficherStatut('attente', 'Confirme le paiement sur ton telephone (code envoye par ' +
+        (providerChoisi === 'orange_money' ? 'Orange Money' : 'MTN MoMo') + ')...');
+
+      // Si CinetPay renvoie une page de paiement a afficher :
+      if (resultat.paymentUrl) {
+        window.open(resultat.paymentUrl, '_blank');
+      }
+
+      surveillerConfirmation();
+    });
+
+    function surveillerConfirmation() {
+      // Verifie toutes les 4 secondes si le webhook a confirme le paiement.
+      // Une amelioration future : utiliser Supabase Realtime au lieu du polling.
+      intervalleVerif = setInterval(async () => {
+        const commande = await getCommande(orderId);
+        if (commande.status === 'confirmee') {
+          clearInterval(intervalleVerif);
+          afficherStatut('succes', 'Paiement confirme ! Ta commande est en cours de preparation.');
+        }
+      }, 4000);
+
+      // Arrete de verifier apres 3 minutes pour ne pas tourner indefiniment
+      setTimeout(() => clearInterval(intervalleVerif), 180000);
+    }
+
+    function afficherStatut(type, message) {
+      const statutDiv = document.getElementById('statut');
+      statutDiv.style.display = 'block';
+      statutDiv.className = type;
+      statutDiv.textContent = message;
+    }
+
+    init();
+  </script>
+</body>
+</html>

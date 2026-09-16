@@ -1,0 +1,31 @@
+{
+  "name": "kwata-shop-desktop",
+  "version": "1.0.0",
+  "description": "Application desktop Kwata Shop (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --mac --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "cm.kwatashop.desktop",
+    "productName": "Kwata Shop",
+    "files": ["main.js", "build/**/*"],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    }
+  }
+}

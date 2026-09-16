@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kwata Shop — Connexion</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 380px; margin: 4rem auto; padding: 1rem; }
+    label { display: block; margin-bottom: 1rem; font-size: 0.9rem; }
+    input { width: 100%; padding: 8px; font-size: 1rem; box-sizing: border-box; margin-top: 4px; }
+    button { width: 100%; padding: 10px; background: #0f6e56; color: white; border: none; border-radius: 6px; font-size: 1rem; }
+    #message { margin-top: 1rem; color: #d9534f; font-size: 0.9rem; }
+    #succes { color: #1a7f37; }
+  </style>
+</head>
+<body>
+  <h1>Connexion</h1>
+  <form id="form-connexion">
+    <label>Email <input type="email" name="email" required /></label>
+    <label>Mot de passe <input type="password" name="password" required /></label>
+    <button type="submit">Se connecter</button>
+    <p id="message"></p>
+  </form>
+
+  <script type="module">
+    import { signIn, getCurrentProfile } from './auth.js';
+
+    const form = document.getElementById('form-connexion');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      message.textContent = 'Connexion en cours...';
+      message.className = '';
+
+      const formData = new FormData(form);
+      const { session, error } = await signIn({
+        email: formData.get('email'),
+        password: formData.get('password'),
+      });
+
+      if (error) {
+        message.textContent = error;
+        return;
+      }
+
+      const profil = await getCurrentProfile();
+      message.className = 'succes';
+      message.textContent = `Connecte en tant que ${profil?.full_name ?? profil?.role ?? ''}. Session active — tu peux maintenant ouvrir la console (F12) et utiliser les fonctions de shops.js / products.js.`;
+    });
+  </script>
+</body>
+</html>

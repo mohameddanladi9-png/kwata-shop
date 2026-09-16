@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Kwata Shop — Inscription</title>
+</head>
+<body>
+  <form id="form-inscription">
+    <h1>Créer un compte</h1>
+
+    <label>
+      Je m'inscris en tant que
+      <select name="role" id="role">
+        <option value="acheteur">Acheteur</option>
+        <option value="vendeur">Vendeur</option>
+      </select>
+    </label>
+
+    <label>Nom complet <input type="text" name="fullName" required /></label>
+    <label>Téléphone <input type="tel" name="phone" /></label>
+    <label>Email <input type="email" name="email" required /></label>
+    <label>Mot de passe <input type="password" name="password" required minlength="8" /></label>
+
+    <button type="submit">S'inscrire</button>
+    <p id="message"></p>
+  </form>
+
+  <script type="module">
+    import { signUp } from './auth.js';
+
+    const form = document.getElementById('form-inscription');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      message.textContent = 'Inscription en cours...';
+
+      const formData = new FormData(form);
+      const { user, error } = await signUp({
+        email: formData.get('email'),
+        password: formData.get('password'),
+        fullName: formData.get('fullName'),
+        phone: formData.get('phone'),
+        role: formData.get('role'),
+      });
+
+      if (error) {
+        message.textContent = error;
+        return;
+      }
+
+      message.textContent = 'Compte créé. Vérifie ta boîte email pour confirmer ton adresse.';
+      form.reset();
+    });
+  </script>
+</body>
+</html>
